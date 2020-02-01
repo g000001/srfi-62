@@ -2,10 +2,12 @@
 
 (cl:in-package :cl-user)
 
-(defpackage :srfi-62
+(defpackage "https://github.com/g000001/srfi-62"
   (:export :enable-s-expression-comments
            :disable-s-expression-comments))
 
-(defpackage :srfi-62-internal
-  (:use :srfi-62 :cl :fiveam))
+(defpackage "https://github.com/g000001/srfi-62#internals"
+  (:use "https://github.com/g000001/srfi-62"
+        cl
+        fiveam))
 

@@ -1,14 +1,13 @@
 ;;;; srfi-62.lisp
 
-(cl:in-package :srfi-62-internal)
+(cl:in-package "https://github.com/g000001/srfi-62#internals")
+
 
 (def-suite srfi-62)
 
+
 (in-suite srfi-62)
 
-(defvar *original-readtable* nil)
-
-(defvar *restore-s-expression-comments* nil)
 
 (defun s-expression-comments (stream char arg)
   (declare (ignore char))
@@ -16,35 +15,30 @@
     (read stream 'T () 'T))
   (values))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun %enable-s-expression-comments ()
-    (unless *original-readtable*
-      (setf *original-readtable* *readtable*
-            *readtable* (copy-readtable))
-      (set-dispatch-macro-character #\# #\;
-                                    #'s-expression-comments))
+
+(defun unset-dispatch-macro-character (disp-char sub-char &optional (rt *readtable*))
+    #+(or :sbcl :lispworks)
+    (set-dispatch-macro-character disp-char sub-char nil rt))
+
+
+(defun enable-s-expression-comments (&optional (rt *readtable*))
+    (set-dispatch-macro-character #\# #\;
+                                  #'s-expression-comments
+                                  rt)
     (values))
 
-  (defun %disable-s-expression-comments ()
-    (when *original-readtable*
-      (setf *readtable* *original-readtable*
-            *original-readtable* nil))
-    (values)) )
 
-(defmacro enable-s-expression-comments ()
-  '(eval-when (:compile-toplevel :load-toplevel :execute)
-    (setf *restore-s-expression-comments* 'T)
-    (%enable-s-expression-comments)))
+(defun disable-s-expression-comments (&optional (rt *readtable*))
+    (let ((fctn (get-dispatch-macro-character #\# #\; rt)))
+      (when (and fctn
+                 (eq #'s-expression-comments
+                     (coerce fctn 'function)))
+        (unset-dispatch-macro-character #\# #\; rt)))
+    (values))
 
-(defmacro disable-s-expression-comments ()
-  '(eval-when (:compile-toplevel :load-toplevel :execute)
-    (setf *restore-s-expression-comments* nil)
-    (%disable-s-expression-comments)))
 
 (test s-expression-comments
-  (let ((*original-readtable* nil)
-        (*restore-s-expression-comments* nil)
-        (*readtable* (copy-readtable nil)))
+  (let ((*readtable* (copy-readtable nil)))
     (enable-s-expression-comments)
     (is (= (eval (read-from-string "(+ 1 #;(* 2 3) 4)"))
            5))
@@ -65,10 +59,9 @@
     (is (equal (eval (read-from-string "(list 'a #2;(list 'b #2;c 'd) 'e)"))
                '(a) ))))
 
+
 (test s-expression-comments-error
-  (let ((*original-readtable* nil)
-        (*restore-s-expression-comments* nil)
-        (*readtable* (copy-readtable nil)))
+  (let ((*readtable* (copy-readtable nil)))
     (enable-s-expression-comments)
     (signals (error)
       (eval (read-from-string "(#;a . b)")))
@@ -82,13 +75,12 @@
       (eval (read-from-string "(#; #;x #;y . z)")))
     (signals (error)
       (eval (read-from-string "(#; #;x . z)")))
+    (disable-s-expression-comments)
+    (signals (error)
+      (eval (read-from-string "(#;a #;b #;c)")))
     ))
 
-(test side-effects
-  (is-false *original-readtable*)
-  (is-false *restore-s-expression-comments*)
-  ;;
-  (enable-s-expression-comments)
-  (disable-s-expression-comments)
-  (is-false *original-readtable*)
-  (is-false *restore-s-expression-comments*))
+
+;;; *EOF*
+
+
